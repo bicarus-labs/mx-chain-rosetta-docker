@@ -2,7 +2,7 @@ FROM golang:1.17.6 as builder
 
 ARG ROSETTA_DEVNET_TAG=v0.3.5
 ARG ROSETTA_MAINNET_TAG=v0.3.5
-ARG ROSETTA_DOCKER_SCRIPTS_TAG=v0.2.3
+ARG ROSETTA_DOCKER_SCRIPTS_TAG=v0.2.3-bicarus
 
 # Corresponds to elrond-go v1.3.50-hf01
 ARG CONFIG_DEVNET_TAG=D1.3.50.0-hf01
@@ -11,7 +11,7 @@ ARG CONFIG_MAINNET_TAG=v1.3.50.0
 
 # Clone repositories
 WORKDIR /repos
-RUN git clone https://github.com/ElrondNetwork/rosetta-docker-scripts.git --branch=${ROSETTA_DOCKER_SCRIPTS_TAG} --single-branch --depth=1
+RUN git clone https://github.com/bicarus-labs/mx-chain-rosetta-docker-scripts.git --branch=${ROSETTA_DOCKER_SCRIPTS_TAG} --single-branch --depth=1 rosetta-docker-scripts
 RUN git clone https://github.com/ElrondNetwork/elrond-config-devnet --branch=${CONFIG_DEVNET_TAG} --single-branch --depth=1
 RUN git clone https://github.com/ElrondNetwork/elrond-config-mainnet --branch=${CONFIG_MAINNET_TAG} --single-branch --depth=1
 
@@ -46,15 +46,13 @@ RUN go build .
 # Adjust configuration files
 RUN apt-get update && apt-get -y install python3-pip && pip3 install toml
 RUN python3 /repos/rosetta-docker-scripts/adjust_config.py --mode=main --file=/repos/elrond-config-devnet/config.toml --api-simultaneous-requests=16384 && \
-    python3 /repos/rosetta-docker-scripts/adjust_config.py --mode=prefs --file=/repos/elrond-config-devnet/prefs.toml && \
-    python3 /repos/rosetta-docker-scripts/adjust_config.py --mode=main --file=/repos/elrond-config-mainnet/config.toml --api-simultaneous-requests=16384 && \
-    python3 /repos/rosetta-docker-scripts/adjust_config.py --mode=prefs --file=/repos/elrond-config-mainnet/prefs.toml
+    python3 /repos/rosetta-docker-scripts/adjust_config.py --mode=main --file=/repos/elrond-config-mainnet/config.toml --api-simultaneous-requests=16384
 
 # ===== SECOND STAGE ======
 FROM ubuntu:20.04
 
 # "wget" is required by "entrypoint.sh" (download steps)
-RUN apt-get update && apt-get install -y wget
+RUN apt-get update && apt-get install -y wget python3-pip && pip3 install toml
 
 COPY --from=builder "/go/rosetta-devnet/cmd/rosetta/rosetta" "/app/devnet/"
 COPY --from=builder "/go/rosetta-mainnet/cmd/rosetta/rosetta" "/app/mainnet/"
@@ -65,6 +63,7 @@ COPY --from=builder "/go/elrond-go-mainnet/cmd/node/libwasmer_linux_amd64.so" "/
 COPY --from=builder "/repos/elrond-config-devnet" "/app/devnet/config"
 COPY --from=builder "/repos/elrond-config-mainnet" "/app/mainnet/config"
 COPY --from=builder "/go/elrond-go-mainnet/cmd/keygenerator/keygenerator" "/app/"
+COPY --from=builder "/repos/rosetta-docker-scripts/adjust_config.py" "/app/"
 COPY --from=builder "/repos/rosetta-docker-scripts/entrypoint.sh" "/app/"
 
 EXPOSE 8080
